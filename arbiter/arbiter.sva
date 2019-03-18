@@ -1,0 +1,80 @@
+// @lang=sva @ts=2
+
+module arbiter_property_suite(clk,reset,request_i,grant_o,free_i,state_s,last_grant_s);
+
+input logic clk;
+input logic reset;
+input logic [1:0] request_i;
+input logic [1:0] grant_o;
+input logic free_i;
+input logic state_s;
+
+input int last_grant_s;
+
+parameter IDLE = 1'b0;
+parameter BUSY = 1'b1;
+
+// sequence definition
+sequence reset_then_competing_request;
+	$fell(reset) ##0 (request_i == 2'b00)[*0:$] ##1 request_i == 2'b11;
+endsequence
+
+
+// property definition
+property behavior_reset;
+  reset ##1 !reset implies ##1 (state_s == IDLE && grant_o == 2'b00);
+endproperty
+
+property behavior_reset_then_competing;
+  disable iff ($rose(reset)) 
+    reset_then_competing_request implies reset_then_competing_request ##[0:$] free_i && grant_o == 2'b01;
+endproperty
+
+property behavior_no_request_no_grant;
+  disable iff(reset) 
+		(request_i == 2'b00) implies ##1 (grant_o == 2'b00);
+endproperty
+
+property behavior_single_request;
+  disable iff(reset)
+    (state_s == IDLE && free_i && request_i[0] != request_i[1]) implies
+		##1 (grant_o == $past(request_i) && state_s == BUSY) ##1 (grant_o == 2'b00 && state_s == IDLE);
+endproperty
+
+
+property behavior_competing_request;
+  logic [1:0] prev_gnt;
+  disable iff(reset)
+    (state_s == IDLE && free_i && request_i == 2'b11) implies
+		##1 (
+      (grant_o == ($past(last_grant_s,1) == 0 ? 2'b10 : 2'b01)) && 
+      (grant_o == (last_grant_s == 0 ? 2'b01 : 2'b10)) && 
+      (state_s == BUSY)
+    ) ##1 (grant_o == 2'b00 && state_s == IDLE);
+endproperty
+
+
+
+// Assumptions
+property no_withdraw_request0;
+  disable iff(reset) (request_i[0] == 1) |-> (request_i[0] == 1)[*0:$] ##0 grant_o[0];
+endproperty
+
+property no_withdraw_request1;
+  disable iff(reset) (request_i[1] == 1) |-> (request_i[1] == 1)[*0:$] ##0 grant_o[1];
+endproperty
+
+
+// assert, assume statement
+a_behavior_reset: assert property (@(posedge clk) behavior_reset);
+a_behavior_reset_then_competing: assert property (@(posedge clk) behavior_reset_then_competing);
+a_behavior_no_request_no_grant: assert property (@(posedge clk) behavior_no_request_no_grant);
+a_behavior_single_request: assert property (@(posedge clk) behavior_single_request);
+a_behavior_competing_request: assert property (@(posedge clk) behavior_competing_request);
+
+a_assumption_no_withdraw0: assume property (@(posedge clk) no_withdraw_request0);
+a_assumption_no_withdraw1: assume property (@(posedge clk) no_withdraw_request1);
+endmodule
+
+// bind statement
+bind arbiter arbiter_property_suite inst_arbiter_property_suite(.*);

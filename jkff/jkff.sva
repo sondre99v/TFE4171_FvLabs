@@ -1,0 +1,43 @@
+// @lang=sva @ts=2
+
+module jkff_property_suite(clk, j_i, k_i, q_o);
+
+input logic clk;
+input logic j_i,k_i;
+input logic q_o;
+
+
+// 0 -> data stable
+// J -> data = 1
+// K -> data = 0
+// JK -> data unstable
+
+// property definitions
+property behavior_no_change;
+  !j_i && !k_i |=> $stable(q_o);
+endproperty
+
+property behavior_set;
+  j_i && !k_i |=> q_o == 1'b1;
+endproperty
+
+property behavior_reset;
+  !j_i && k_i |=> q_o == 1'b0;
+endproperty
+
+property behavior_toggle;
+  j_i && k_i |=> !$stable(q_o);
+endproperty
+
+
+// tell the tool what properties to check
+a_behavior_no_change: assert property (@(posedge clk) behavior_no_change);
+a_behavior_set: assert property (@(posedge clk) behavior_set);
+a_behavior_reset: assert property (@(posedge clk) behavior_reset);
+a_behavior_toggle: assert property (@(posedge clk) behavior_toggle);
+
+
+endmodule
+
+// bind the verification IP to the design
+bind jkff jkff_property_suite inst_jkff_property_suite(.*);

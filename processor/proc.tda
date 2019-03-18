@@ -1,0 +1,331 @@
+// @lang=tda @ts=2
+
+module proc_property_suite(reset,clk, IR, REG_FILE,CONTROL_STATE,
+dataIn, writeEnable, dataOut,dataAddr,instrAddr,instrIn);
+
+input logic reset;
+input logic clk;
+input logic [15:0] IR;
+input logic [7:0][7:0] REG_FILE;
+input logic [2:0] CONTROL_STATE;
+input logic [7:0] dataIn;
+input logic writeEnable;
+input logic [7:0] dataOut;
+input logic [7:0] dataAddr;
+input logic [15:0] instrAddr;
+input logic [15:0] instrIn;
+
+parameter c_IF  = 3'b001;
+parameter c_ID  = 3'b010;
+parameter c_EX  = 3'b011;
+parameter c_MEM = 3'b100;
+parameter c_WB  = 3'b101;
+
+parameter c_ALU_REG = 4'b0001;
+
+parameter c_ADD_IMM = 4'b0010;
+parameter c_OR_IMM  = 4'b0011;
+
+parameter c_LOAD    = 4'b0100;
+parameter c_STORE   = 4'b0101;
+
+parameter c_JUMP    = 4'b0110;
+parameter c_BRANCH  = 4'b0111;
+
+parameter c_ADD     = 3'b001;
+parameter c_OR      = 3'b010;
+
+// Sequence definition for SVA property
+
+`define true 1
+
+`include "tidal.sv"
+
+`begin_tda(ops)
+
+// Sequence definition for TiDAL property
+
+// Your operational properties
+
+property property_or_imm;
+	logic [2:0] rs1; // Index of the source register
+	logic [2:0] rd; // Index of the destination register
+	logic [5:0] imm; // Value of the immidiate argument
+	logic [7:0] content_rs1; // Value in the source register
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rd, instrIn[8:6]) and
+	t ##0 set_freeze(imm, instrIn[5:0]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_OR_IMM and // Current instruction is an OR_IMM instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rd != 0 and
+  t ##0 rs1 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state and result
+	t ##5 CONTROL_STATE == c_IF and
+	t ##5 REG_FILE[rd] == (content_rs1 | {imm[5], imm[5], imm});
+endproperty
+
+
+property property_or_reg;
+	logic [2:0] rs1; // Index of source register A
+	logic [2:0] rs2; // Index of source register B
+	logic [2:0] rd; // Index of the destination register
+	logic [7:0] content_rs1; // Value in source register A
+	logic [7:0] content_rs2; // Value in source register B
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rs2, instrIn[8:6]) and
+	t ##0 set_freeze(rd, instrIn[5:3]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+	t ##0 set_freeze(content_rs2, REG_FILE[rs2]) and
+
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_ALU_REG and // Current instruction is an ALU_REG instruction
+	t ##0 instrIn[2:0] == c_OR and // Current instruction is an OR instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rd != 0 and
+  t ##0 rs1 != 0 and 
+  t ##0 rs2 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state and result
+	t ##5 CONTROL_STATE == c_IF and
+	t ##5 REG_FILE[rd] == (content_rs1 | content_rs2);
+endproperty
+
+
+property property_add_imm;
+	logic [2:0] rs1; // Index of the source register
+	logic [2:0] rd; // Index of the destination register
+	logic [5:0] imm; // Value of the immidiate argument
+	logic [7:0] content_rs1; // Value in the source register
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rd, instrIn[8:6]) and
+	t ##0 set_freeze(imm, instrIn[5:0]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_ADD_IMM and // Current instruction is an ADD_IMM instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rd != 0 and
+  t ##0 rs1 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state and result
+	t ##5 CONTROL_STATE == c_IF and
+	t ##5 REG_FILE[rd] == (content_rs1 + {imm[5], imm[5], imm});
+endproperty
+
+
+property property_add_reg;
+	logic [2:0] rs1; // Index of source register A
+	logic [2:0] rs2; // Index of source register B
+	logic [2:0] rd; // Index of the destination register
+	logic [7:0] content_rs1; // Value in source register A
+	logic [7:0] content_rs2; // Value in source register B
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rs2, instrIn[8:6]) and
+	t ##0 set_freeze(rd, instrIn[5:3]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+	t ##0 set_freeze(content_rs2, REG_FILE[rs2]) and
+
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_ALU_REG and // Current instruction is an ALU_REG instruction
+	t ##0 instrIn[2:0] == c_ADD and // Current instruction is an ADD instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rd != 0 and
+  t ##0 rs1 != 0 and 
+  t ##0 rs2 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state and result
+	t ##5 CONTROL_STATE == c_IF and
+	t ##5 REG_FILE[rd] == (content_rs1 + content_rs2);
+endproperty
+
+
+property property_load;
+	logic [2:0] rs1; // Index of the source register
+	logic [2:0] rd; // Index of the destination register
+	logic [5:0] imm; // Value of the immidiate argument
+	logic [7:0] content_rs1; // Value in the source register
+	logic [7:0] dataIn_value; // Value on the dataIn bus
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rd, instrIn[8:6]) and
+	t ##0 set_freeze(imm, instrIn[5:0]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+  t ##3 set_freeze(dataIn_value, dataIn) and // Freeze the value of the dataIn bus during the MEM-phase
+
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_LOAD and // Current instruction is a LOAD instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rd != 0 and
+  t ##0 rs1 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+
+	// Check that the correct address and data is being sent to the memory
+  t ##3 dataAddr == (content_rs1 + {imm[5], imm[5], imm}) and
+  t ##3 writeEnable == 0 and
+
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state and result
+	t ##5 CONTROL_STATE == c_IF and
+	t ##5 REG_FILE[rd] == dataIn_value;
+endproperty
+
+
+property property_store;
+	logic [2:0] rs1; // Index of source register A
+	logic [2:0] rs2; // Index of source register B
+	logic [5:0] imm; // Value of the immidiate argument
+	logic [7:0] content_rs1; // Value in source register A
+	logic [7:0] content_rs2; // Value in source register B
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(rs2, instrIn[8:6]) and
+	t ##0 set_freeze(imm, instrIn[5:0]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+	t ##0 set_freeze(content_rs2, REG_FILE[rs2]) and
+  
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_STORE and // Current instruction is a STORE instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rs1 != 0 and
+  t ##0 rs2 != 0
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+	t ##2 CONTROL_STATE == c_EX and
+	t ##3 CONTROL_STATE == c_MEM and
+
+	// Check that the correct address and data is being sent to the memory
+  t ##3 dataAddr == (content_rs1 + {imm[5], imm[5], imm}) and
+  t ##3 dataOut == content_rs2 and
+  t ##3 writeEnable == 1 and
+
+	t ##4 CONTROL_STATE == c_WB and
+
+  // Check that the processor ends up with the correct state
+	t ##5 CONTROL_STATE == c_IF;
+endproperty
+
+
+property property_jump;
+	logic [11:0] offset; // Value of the offset argument
+  logic [15:0] prev_PC; // Previous value of the PC
+
+	t ##0 set_freeze(offset, instrIn[11:0]) and
+	t ##0 set_freeze(prev_PC, instrAddr) and
+  
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_JUMP // Current instruction is a JUMP instruction
+
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+
+  // Check that the processor ends up with the correct state and instruction address
+	t ##2 CONTROL_STATE == c_IF and
+  t ##2 instrAddr == (prev_PC + 16'd2 + {{4{offset[11]}}, offset});
+endproperty
+
+
+property property_branch;
+	logic [8:0] offset; // Value of the offset argument
+	logic [2:0] rs1; // Index of the source register
+	logic [7:0] content_rs1; // Value in the source register
+  logic [15:0] prev_PC; // Previous value of the PC
+
+	t ##0 set_freeze(rs1, instrIn[11:9]) and
+	t ##0 set_freeze(content_rs1, REG_FILE[rs1]) and
+	t ##0 set_freeze(offset, instrIn[8:0]) and
+	t ##0 set_freeze(prev_PC, instrAddr) and
+  
+	t ##0 CONTROL_STATE == c_IF and // Processor is in instruction fetch phase
+	t ##0 instrIn[15:12] == c_BRANCH and // Current instruction is a BRANCH instruction
+
+	// Check that R0 is not used, as this register is "special"
+  t ##0 rs1 != 0
+	implies
+
+  // Check that the processor follows the correct execution path
+	t ##1 CONTROL_STATE == c_ID and
+
+  // Check that the processor ends up with the correct state and instruction address
+	t ##2 CONTROL_STATE == c_IF and
+  t ##2 instrAddr == (
+    (content_rs1 == 0) 
+      ? (prev_PC + 16'd2 + {{7{offset[8]}}, offset})
+      : (prev_PC + 16'd2)
+    );
+endproperty
+
+
+// Assert your properties
+a_or_imm: assert property (@(posedge clk) disable iff (reset == 1) property_or_imm);
+a_or_reg: assert property (@(posedge clk) disable iff (reset == 1) property_or_reg);
+a_add_imm: assert property (@(posedge clk) disable iff (reset == 1) property_add_imm);
+a_add_reg: assert property (@(posedge clk) disable iff (reset == 1) property_add_reg);
+a_load: assert property (@(posedge clk) disable iff (reset == 1) property_load);
+a_store: assert property (@(posedge clk) disable iff (reset == 1) property_store);
+a_jump: assert property (@(posedge clk) disable iff (reset == 1) property_jump);
+a_branch: assert property (@(posedge clk) disable iff (reset == 1) property_branch);
+
+`end_tda
+
+endmodule
+
+// Your bind statement
+bind proc proc_property_suite inst_proc_property_suite(.*);
