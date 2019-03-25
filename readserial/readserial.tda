@@ -38,22 +38,29 @@ endsequence;
 
 // Your operational properties
 property reset;
-  t##0 reset_sequence
+  reset_sequence
   
-  implies
+  |=>
   
   t##0 state_s == s_IDLE and
-  t##0 cnt_s == 3'b0;
+  t##0 valid == 1'b0 and
+  t##0 cnt_s == 3'b0 and
+  t##0 cnt_en == 1'b0;
 endproperty
 
 
 property stay_in_idle;
   t##0 state_s == s_IDLE and
-  t##0 rxd == 1'b1
+  t##0 rxd == 1'b1 and
+  t##0 in_idle_counter_is_0 and
+  t##0 in_idle_counter_is_not_enabled
 
   implies
 
-  t##1 state_s == s_IDLE;
+  t##1 in_idle_counter_is_0 and
+  t##1 in_idle_counter_is_not_enabled and
+  t##1 state_s == s_IDLE and
+  t##1 valid == 1'b0;
 endproperty;
 
 
@@ -67,14 +74,6 @@ property read_byte;
   logic sd6;
   logic sd7;
 
-  
-  t##0 in_idle_counter_is_0 and
-  t##0 in_idle_counter_is_not_enabled and
-  
-  // Assume the device starts in the IDLE state, and a start bit arrives
-  t##0 state_s == s_IDLE and
-  t##0 rxd == 1'b0 and
-
   // Freeze all the 8 bits of the transmission, for later checking
   t##1 set_freeze(sd7, rxd) and
   t##2 set_freeze(sd6, rxd) and
@@ -83,27 +82,52 @@ property read_byte;
   t##5 set_freeze(sd3, rxd) and
   t##6 set_freeze(sd2, rxd) and
   t##7 set_freeze(sd1, rxd) and
-  t##8 set_freeze(sd0, rxd)
+  t##8 set_freeze(sd0, rxd) and
+  
+
+  // Assume invariants
+  t##0 in_idle_counter_is_0 and
+  t##0 in_idle_counter_is_not_enabled and
+  
+  // Assume the device starts in the IDLE state, and a start bit arrives
+  t##0 state_s == s_IDLE and
+  t##0 rxd == 1'b0
   
   implies
 
   // Assert that the state is READDATA for 8 cycles
   t##1 state_s == s_READDATA and
+  t##1 valid == 1'b0 and
   t##2 state_s == s_READDATA and
+  t##2 valid == 1'b0 and
   t##3 state_s == s_READDATA and
+  t##3 valid == 1'b0 and
   t##4 state_s == s_READDATA and
+  t##4 valid == 1'b0 and
   t##5 state_s == s_READDATA and
+  t##5 valid == 1'b0 and
   t##6 state_s == s_READDATA and
+  t##6 valid == 1'b0 and
   t##7 state_s == s_READDATA and
+  t##7 valid == 1'b0 and
   t##8 state_s == s_READDATA and
+  t##8 valid == 1'b0 and
+
+
+  t##9 in_idle_counter_is_0 and
+  t##9 in_idle_counter_is_not_enabled and
 
   // Assert that the state returns to IDLE, that the correct data is presented on the data output,
   // and that the valid signal goes high for one clock cycle.
-  t##0 state_s == s_IDLE and
+  t##9 state_s == s_IDLE and
   t##9 valid == 1'b1 and
-  t##9 data == {sd7, sd6, sd5, sd4, sd3, sd2, sd1, sd0} and
+  t##9 data == {sd7, sd6, sd5, sd4, sd3, sd2, sd1, sd0};// and
 
-  t##10 valid == 1'b0;
+  //t##10 in_idle_counter_is_0 and
+  //t##10 in_idle_counter_is_not_enabled and
+
+  //t##10 valid == 1'b0 and
+  //t##10 cnt_s == 3'b0;
 endproperty;
 
 
@@ -149,4 +173,4 @@ a_in_idle_counter_is_0__base: assert property (@(posedge clk) disable iff (reset
 endmodule
 
 // Your bind statement
-bind readserial readserial_property_suite inst_readserial_property_suite(.*);
+bind readserial readserial_property_suite inst_readserial_properties(.*);
